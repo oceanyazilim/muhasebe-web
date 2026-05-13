@@ -1,0 +1,29 @@
+services:
+  muhasebe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      ConnectionStrings__DefaultConnection: Data Source=/app/App_Data/muhasebe-web.db
+    volumes:
+      - muhasebe-data:/app/App_Data
+      - muhasebe-keys:/root/.aspnet/DataProtection-Keys
+    networks:
+      - dokploy-network
+    expose:
+      - "8080"
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.services.muhasebe.loadbalancer.server.port=8080
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  muhasebe-data:
+  muhasebe-keys:
