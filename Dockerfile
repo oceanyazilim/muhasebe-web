@@ -1,40 +1,34 @@
-# Multi-stage Dockerfile: .NET 8 SDK ile build, runtime imajıyla minik container
-# Hosting panellerinde (Coolify/CapRover/Dokploy vb.) Git+Dockerfile ile çalışır.
+# Multi-stage Dockerfile — Blazor Server .NET 8
+# Dokploy / Coolify / CapRover gibi paneller bunu otomatik kullanir.
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Bağımlılıkları önce restore et (Docker cache'i için)
-COPY MuhasebeApp.Web/MuhasebeApp.Web.csproj MuhasebeApp.Web/
-RUN dotnet restore MuhasebeApp.Web/MuhasebeApp.Web.csproj
+# Önce sadece csproj (Docker katman önbelleği için)
+COPY *.csproj ./
+RUN dotnet restore
 
-# Geri kalanı kopyala ve publish et
-COPY MuhasebeApp.Web/ MuhasebeApp.Web/
-RUN dotnet publish MuhasebeApp.Web/MuhasebeApp.Web.csproj \
-    -c Release \
-    -o /app/publish \
-    --no-restore \
-    /p:UseAppHost=false
+# Tüm kaynak kodu
+COPY . .
+RUN dotnet publish -c Release -o /app/publish --no-restore /p:UseAppHost=false
 
-# Runtime stage — sadece aspnet runtime, ~200MB
+# Runtime imajı — sadece ASP.NET Core runtime, ~210 MB
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-# SQLite veritabanı için kalıcı dizin
-RUN mkdir -p /app/App_Data && chmod 755 /app/App_Data
+# SQLite için kalıcı dizin
+RUN mkdir -p /app/App_Data && chmod 777 /app/App_Data
 
 COPY --from=build /app/publish .
 
-# Container içinde 8080 portunu dinle (Coolify/CapRover varsayılanı)
-ENV ASPNETCORE_URLS=http://+:8080
+# 0.0.0.0 ile bind — bazı reverse proxy'lerde IPv6-only sorunlarını önler
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_RUNNING_IN_CONTAINER=true
-ENV DOTNET_USE_POLLING_FILE_WATCHER=true
 
 EXPOSE 8080
 
-# Sağlık kontrolü için basit endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-  CMD wget -qO- http://localhost:8080/Identity/Account/Login || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:8080/Identity/Account/Login || exit 1
 
 ENTRYPOINT ["dotnet", "MuhasebeApp.Web.dll"]
