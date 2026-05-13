@@ -1,0 +1,89 @@
+@inject AppDbContext Db
+@using Microsoft.EntityFrameworkCore
+@using MuhasebeApp.Web.Data
+
+<div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(Yon == OdemeYonu.Alacak ? "Alacak Kaydı" : "Borç Kaydı")</h5>
+                <button type="button" class="btn-close" @onclick="@(() => OnClosed.InvokeAsync())"></button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_hata))
+                {
+                    <div class="alert alert-danger">@_hata</div>
+                }
+                <div class="mb-3">
+                    <label class="form-label">Profil *</label>
+                    <select class="form-select" @bind="OdemeNotu.CariId">
+                        <option value="0">-- seçin --</option>
+                        @foreach (var c in _profiller)
+                        {
+                            <option value="@c.Id">@c.Kod — @c.Unvan</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Başlık *</label>
+                    <input class="form-control" @bind="OdemeNotu.Baslik" placeholder="ör. Mart 2026 mal bedeli"/>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label">Tutar (₺) *</label>
+                        <input type="number" step="0.01" class="form-control" @bind="OdemeNotu.Tutar"/>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Vade Tarihi *</label>
+                        <input type="date" class="form-control" @bind="OdemeNotu.VadeTarihi"/>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Açıklama</label>
+                    <textarea class="form-control" rows="3" @bind="OdemeNotu.Aciklama"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="@(() => OnClosed.InvokeAsync())">İptal</button>
+                <button class="btn btn-primary" @onclick="Kaydet">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public OdemeNotu OdemeNotu { get; set; } = new();
+    [Parameter] public OdemeYonu Yon { get; set; }
+    [Parameter] public string? UserId { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private List<Cari> _profiller = new();
+    private string? _hata;
+
+    protected override async Task OnInitializedAsync()
+    {
+        OdemeNotu.Yon = Yon;
+        _profiller = await Db.Cariler.Where(c => c.UserId == UserId && c.Aktif).OrderBy(c => c.Unvan).ToListAsync();
+    }
+
+    private async Task Kaydet()
+    {
+        if (OdemeNotu.CariId == 0) { _hata = "Profil seçimi zorunludur."; return; }
+        if (string.IsNullOrWhiteSpace(OdemeNotu.Baslik)) { _hata = "Başlık zorunludur."; return; }
+        if (OdemeNotu.Tutar <= 0) { _hata = "Tutar sıfırdan büyük olmalı."; return; }
+
+        if (OdemeNotu.Id == 0)
+        {
+            OdemeNotu.UserId = UserId!;
+            OdemeNotu.Yon = Yon;
+            Db.OdemeNotlari.Add(OdemeNotu);
+        }
+        else
+        {
+            Db.OdemeNotlari.Update(OdemeNotu);
+        }
+        await Db.SaveChangesAsync();
+        await OnSaved.InvokeAsync();
+    }
+}

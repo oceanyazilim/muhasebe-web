@@ -1,0 +1,13 @@
+@{
+    if (ViewData.TryGetValue("ParentLayout", out var parentLayout))
+    {
+        Layout = (string?)parentLayout;
+    }
+    else
+    {
+        Layout = "/Pages/Shared/_Layout.cshtml";
+    }
+}
+@RenderBody()
+
+@await RenderSectionAsync("Scripts", required: false)

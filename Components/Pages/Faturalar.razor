@@ -1,0 +1,336 @@
+@page "/faturalar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthService Auth
+@inject AppDbContext Db
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using MuhasebeApp.Web.Data
+
+<PageTitle>Faturalar</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-1"><i class="bi bi-receipt"></i> Faturalar</h1>
+        <small class="text-muted">Gönderilen ve gelen tüm faturaların kaydı</small>
+    </div>
+    <button class="btn btn-primary" @onclick="YeniAc">
+        <i class="bi bi-plus-circle"></i> Fatura Ekle
+    </button>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card"><div class="card-body p-3">
+            <small class="text-muted">Gönderilen Toplam</small>
+            <h4 class="text-success mb-0">@_gonderilen.ToString("N2") ₺</h4>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body p-3">
+            <small class="text-muted">Gelen Toplam</small>
+            <h4 class="text-danger mb-0">@_gelen.ToString("N2") ₺</h4>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body p-3">
+            <small class="text-muted">Bekleyen Tahsilat</small>
+            <h4 class="mb-0">@_bekleyen.ToString("N2") ₺</h4>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card"><div class="card-body p-3">
+            <small class="text-muted">Fatura Adedi</small>
+            <h4 class="mb-0">@_liste.Count</h4>
+        </div></div>
+    </div>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-md-6">
+        <input @bind="_arama" @bind:event="oninput" @bind:after="Yukle" class="form-control" placeholder="Fatura no, iş açıklaması, profil adı..."/>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="_yonFiltre" @bind:after="Yukle">
+            <option value="-1">Tüm Yönler</option>
+            <option value="0">Gönderilenler</option>
+            <option value="1">Gelenler</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="_durumFiltre" @bind:after="Yukle">
+            <option value="-1">Tüm Durumlar</option>
+            <option value="0">Beklemede</option>
+            <option value="1">Ödendi</option>
+            <option value="2">Kısmi</option>
+            <option value="3">İptal</option>
+        </select>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Fatura No</th>
+                <th>Tarih</th>
+                <th>Profil</th>
+                <th>İş Açıklaması</th>
+                <th>Yön</th>
+                <th class="text-end">Genel Toplam</th>
+                <th>Durum</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_liste.Count == 0)
+            {
+                <tr><td colspan="8" class="text-center text-muted py-4">Fatura bulunamadı.</td></tr>
+            }
+            @foreach (var f in _liste)
+            {
+                <tr>
+                    <td><strong>@f.FaturaNo</strong></td>
+                    <td>@f.Tarih.ToString("dd.MM.yyyy")</td>
+                    <td>@f.Cari?.Unvan</td>
+                    <td class="text-truncate" style="max-width:300px" title="@f.IsAciklamasi">@f.IsAciklamasi</td>
+                    <td>
+                        <span class="badge @(f.Yon == FaturaYonu.Gonderilen ? "bg-success" : "bg-danger")">@f.YonMetni</span>
+                    </td>
+                    <td class="text-end fw-bold">@f.ToplamTutar.ToString("N2") ₺</td>
+                    <td><small>@f.DurumMetni</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Duzenle(f)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Sil(f)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_dialogAcik)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_secili.Id == 0 ? "Yeni Fatura" : "Faturayı Düzenle: " + _secili.FaturaNo)</h5>
+                    <button type="button" class="btn-close" @onclick="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_hata))
+                    {
+                        <div class="alert alert-danger">@_hata</div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Fatura Yönü *</label>
+                            <div class="btn-group w-100">
+                                <input type="radio" class="btn-check" name="yon" id="yonG" checked="@(_secili.Yon == FaturaYonu.Gonderilen)" @onchange="() => _secili.Yon = FaturaYonu.Gonderilen"/>
+                                <label class="btn btn-outline-success" for="yonG">Gönderilen (Müşteriye)</label>
+                                <input type="radio" class="btn-check" name="yon" id="yonR" checked="@(_secili.Yon == FaturaYonu.Gelen)" @onchange="() => _secili.Yon = FaturaYonu.Gelen"/>
+                                <label class="btn btn-outline-danger" for="yonR">Gelen (Tedarikçiden)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Müşteri / Profil *</label>
+                            <select class="form-select" @bind="_secili.CariId">
+                                <option value="0">-- seçin --</option>
+                                @foreach (var c in _profiller)
+                                {
+                                    <option value="@c.Id">@c.Kod — @c.Unvan</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fatura No *</label>
+                            <input class="form-control" @bind="_secili.FaturaNo"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tarih *</label>
+                            <input type="date" class="form-control" @bind="_secili.Tarih"/>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">İş Açıklaması *</label>
+                            <textarea class="form-control" rows="2" @bind="_secili.IsAciklamasi" placeholder="Yapılan iş, satılan mal veya hizmet detayları..."></textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tutar (KDV hariç) *</label>
+                            <input type="number" step="0.01" class="form-control" @bind="_secili.Tutar" @bind:after="Hesapla"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">KDV Oranı (%)</label>
+                            <input type="number" step="0.1" class="form-control" @bind="_secili.KdvOrani" @bind:after="Hesapla"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Genel Toplam</label>
+                            <input class="form-control" value="@_secili.ToplamTutar.ToString("N2")" disabled/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Vade Tarihi</label>
+                            <input type="date" class="form-control" @bind="_vade"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Durum</label>
+                            <select class="form-select" @bind="_secili.Durum">
+                                <option value="@FaturaDurumu.Beklemede">Beklemede</option>
+                                <option value="@FaturaDurumu.Odendi">Ödendi</option>
+                                <option value="@FaturaDurumu.KismiOdendi">Kısmi Ödendi</option>
+                                <option value="@FaturaDurumu.Iptal">İptal</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Notlar</label>
+                            <textarea class="form-control" rows="2" @bind="_secili.Notlar"></textarea>
+                        </div>
+                        @if (_secili.Id == 0)
+                        {
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="odemeNotu" @bind="_odemeNotuOlustur"/>
+                                    <label class="form-check-label" for="odemeNotu">
+                                        Otomatik Alacak/Borç notu oluştur (Alacaklar/Borçlar sayfasında görünür)
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Kapat">İptal</button>
+                    <button class="btn btn-primary" @onclick="Kaydet">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string? _userId;
+    private string _arama = "";
+    private int _yonFiltre = -1;
+    private int _durumFiltre = -1;
+    private List<Fatura> _liste = new();
+    private List<Cari> _profiller = new();
+    private decimal _gonderilen, _gelen, _bekleyen;
+    private bool _dialogAcik;
+    private Fatura _secili = new();
+    private DateTime? _vade;
+    private bool _odemeNotuOlustur = true;
+    private string? _hata;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await Auth.GetUserIdAsync();
+        await Yukle();
+    }
+
+    private async Task Yukle()
+    {
+        if (string.IsNullOrEmpty(_userId)) return;
+        var q = Db.Faturalar.Include(f => f.Cari).Where(f => f.UserId == _userId);
+        if (_yonFiltre >= 0) q = q.Where(f => (int)f.Yon == _yonFiltre);
+        if (_durumFiltre >= 0) q = q.Where(f => (int)f.Durum == _durumFiltre);
+        if (!string.IsNullOrWhiteSpace(_arama))
+        {
+            var a = "%" + _arama + "%";
+            q = q.Where(f => EF.Functions.Like(f.FaturaNo, a) || EF.Functions.Like(f.IsAciklamasi, a)
+                || EF.Functions.Like(f.Cari!.Unvan, a));
+        }
+        _liste = await q.OrderByDescending(f => f.Tarih).ToListAsync();
+        var hepsi = await Db.Faturalar.Where(f => f.UserId == _userId && f.Durum != FaturaDurumu.Iptal).ToListAsync();
+        _gonderilen = hepsi.Where(f => f.Yon == FaturaYonu.Gonderilen).Sum(f => f.ToplamTutar);
+        _gelen = hepsi.Where(f => f.Yon == FaturaYonu.Gelen).Sum(f => f.ToplamTutar);
+        _bekleyen = hepsi.Where(f => f.Yon == FaturaYonu.Gonderilen && (f.Durum == FaturaDurumu.Beklemede || f.Durum == FaturaDurumu.KismiOdendi))
+            .Sum(f => f.ToplamTutar - f.OdenenTutar);
+
+        _profiller = await Db.Cariler.Where(c => c.UserId == _userId && c.Aktif).OrderBy(c => c.Unvan).ToListAsync();
+    }
+
+    private async Task YeniAc()
+    {
+        var sayi = await Db.Faturalar.CountAsync(f => f.UserId == _userId) + 1;
+        _secili = new Fatura
+        {
+            UserId = _userId!,
+            FaturaNo = $"{DateTime.Today.Year}-{sayi:0000}",
+            Tarih = DateTime.Today,
+            KdvOrani = 20,
+            Durum = FaturaDurumu.Beklemede,
+            Yon = FaturaYonu.Gonderilen
+        };
+        _vade = DateTime.Today.AddDays(30);
+        _odemeNotuOlustur = true;
+        _hata = null;
+        _dialogAcik = true;
+    }
+
+    private void Duzenle(Fatura f)
+    {
+        _secili = f;
+        _vade = f.VadeTarihi;
+        _hata = null;
+        _dialogAcik = true;
+    }
+
+    private async Task Sil(Fatura f)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Fatura {f.FaturaNo} silinsin mi?")) return;
+        Db.Faturalar.Remove(f);
+        await Db.SaveChangesAsync();
+        await Yukle();
+    }
+
+    private void Kapat() => _dialogAcik = false;
+
+    private void Hesapla()
+    {
+        _secili.KdvTutari = _secili.Tutar * _secili.KdvOrani / 100m;
+        _secili.ToplamTutar = _secili.Tutar + _secili.KdvTutari;
+    }
+
+    private async Task Kaydet()
+    {
+        if (_secili.CariId == 0) { _hata = "Profil seçimi zorunludur."; return; }
+        if (string.IsNullOrWhiteSpace(_secili.FaturaNo)) { _hata = "Fatura no zorunludur."; return; }
+        if (string.IsNullOrWhiteSpace(_secili.IsAciklamasi)) { _hata = "İş açıklaması zorunludur."; return; }
+        if (_secili.Tutar <= 0) { _hata = "Tutar sıfırdan büyük olmalı."; return; }
+
+        Hesapla();
+        _secili.VadeTarihi = _vade;
+        if (_secili.Id == 0)
+        {
+            _secili.UserId = _userId!;
+            Db.Faturalar.Add(_secili);
+            await Db.SaveChangesAsync();
+            if (_odemeNotuOlustur)
+            {
+                var notu = new OdemeNotu
+                {
+                    UserId = _userId!,
+                    CariId = _secili.CariId,
+                    Yon = _secili.Yon == FaturaYonu.Gonderilen ? OdemeYonu.Alacak : OdemeYonu.Borc,
+                    Baslik = $"Fatura {_secili.FaturaNo}",
+                    Aciklama = _secili.IsAciklamasi,
+                    Tutar = _secili.ToplamTutar,
+                    ParaBirimi = _secili.ParaBirimi,
+                    VadeTarihi = _vade ?? _secili.Tarih.AddDays(30),
+                    Durum = OdemeDurumu.Beklemede
+                };
+                Db.OdemeNotlari.Add(notu);
+                await Db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            Db.Faturalar.Update(_secili);
+            await Db.SaveChangesAsync();
+        }
+        _dialogAcik = false;
+        await Yukle();
+    }
+}

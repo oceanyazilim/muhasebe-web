@@ -1,0 +1,40 @@
+@inherits LayoutComponentBase
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4 d-flex justify-content-end align-items-center">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="me-3 text-muted small">
+                        <i class="bi bi-person-circle"></i> @context.User.Identity?.Name
+                    </span>
+                    <form action="Identity/Account/Logout" method="post" class="d-inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="/" />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-box-arrow-right"></i> Çıkış
+                        </button>
+                    </form>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="Identity/Account/Login" class="btn btn-sm btn-primary me-2">Giriş Yap</a>
+                    <a href="Identity/Account/Register" class="btn btn-sm btn-outline-primary">Kayıt Ol</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    Beklenmedik bir hata oluştu.
+    <a href="" class="reload">Yenile</a>
+    <a class="dismiss">🗙</a>
+</div>

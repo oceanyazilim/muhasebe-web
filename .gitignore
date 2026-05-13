@@ -1,0 +1,13 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+App_Data/*.db
+App_Data/*.db-journal
+App_Data/*.db-shm
+App_Data/*.db-wal
+publish/
+out/
+*.log

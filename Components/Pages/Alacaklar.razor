@@ -1,0 +1,137 @@
+@page "/alacaklar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthService Auth
+@inject AppDbContext Db
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using MuhasebeApp.Web.Data
+
+<PageTitle>Alacaklar</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-1 text-success"><i class="bi bi-arrow-down-circle"></i> Alacaklar</h1>
+        <small class="text-muted">Tahsilat bekleyenler — bize ödeme yapacak olanlar</small>
+    </div>
+    <button class="btn btn-success" @onclick="YeniAc">
+        <i class="bi bi-plus-circle"></i> Yeni Alacak
+    </button>
+</div>
+
+<input @bind="_arama" @bind:event="oninput" @bind:after="Yukle" class="form-control mb-3" placeholder="Profil, başlık veya açıklama içinde ara..."/>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Başlık</th>
+                <th>Profil</th>
+                <th>Vade</th>
+                <th class="text-end">Tutar</th>
+                <th class="text-end">Kalan</th>
+                <th>Durum</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_liste.Count == 0)
+            {
+                <tr><td colspan="7" class="text-center text-muted py-4">Alacak bulunamadı.</td></tr>
+            }
+            @foreach (var o in _liste)
+            {
+                <tr>
+                    <td>
+                        <strong>@o.Baslik</strong>
+                        <div class="small text-muted">@o.Aciklama</div>
+                    </td>
+                    <td>@o.Cari?.Unvan</td>
+                    <td>
+                        @o.VadeTarihi.ToString("dd.MM.yyyy")
+                        <div class="small @(o.VadesiGecmis ? "text-danger" : "text-muted")">
+                            @VadeMetni(o)
+                        </div>
+                    </td>
+                    <td class="text-end">@o.Tutar.ToString("N2") ₺</td>
+                    <td class="text-end fw-bold text-success">@o.KalanTutar.ToString("N2") ₺</td>
+                    <td>@o.DurumMetni</td>
+                    <td>
+                        <button class="btn btn-sm btn-success" @onclick="() => TahsilEt(o)">Tahsil Et</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Sil(o)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_dialogAcik)
+{
+    <NotuDialog OdemeNotu="@_secili" Yon="@OdemeYonu.Alacak" UserId="@_userId" OnSaved="OnSaved" OnClosed="() => _dialogAcik = false" />
+}
+
+@code {
+    private string? _userId;
+    private string _arama = "";
+    private List<OdemeNotu> _liste = new();
+    private bool _dialogAcik;
+    private OdemeNotu _secili = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await Auth.GetUserIdAsync();
+        await Yukle();
+    }
+
+    private async Task Yukle()
+    {
+        if (string.IsNullOrEmpty(_userId)) return;
+        var q = Db.OdemeNotlari.Include(o => o.Cari).Where(o => o.UserId == _userId && o.Yon == OdemeYonu.Alacak);
+        if (!string.IsNullOrWhiteSpace(_arama))
+        {
+            var a = "%" + _arama + "%";
+            q = q.Where(o => EF.Functions.Like(o.Baslik, a) || EF.Functions.Like(o.Aciklama ?? "", a) || EF.Functions.Like(o.Cari!.Unvan, a));
+        }
+        _liste = await q.OrderBy(o => o.VadeTarihi).ToListAsync();
+    }
+
+    private void YeniAc()
+    {
+        _secili = new OdemeNotu { UserId = _userId!, Yon = OdemeYonu.Alacak, VadeTarihi = DateTime.Today.AddDays(30) };
+        _dialogAcik = true;
+    }
+
+    private async Task TahsilEt(OdemeNotu o)
+    {
+        o.OdenenTutar = o.Tutar;
+        o.Durum = OdemeDurumu.Odendi;
+        o.OdemeTarihi = DateTime.UtcNow;
+        Db.OdemeNotlari.Update(o);
+        await Db.SaveChangesAsync();
+        await Yukle();
+    }
+
+    private async Task Sil(OdemeNotu o)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Silinsin mi?")) return;
+        Db.OdemeNotlari.Remove(o);
+        await Db.SaveChangesAsync();
+        await Yukle();
+    }
+
+    private async Task OnSaved()
+    {
+        _dialogAcik = false;
+        await Yukle();
+    }
+
+    private string VadeMetni(OdemeNotu o)
+    {
+        var g = (o.VadeTarihi.Date - DateTime.Today).Days;
+        if (g == 0) return "Bugün vadesi";
+        if (g > 0) return $"{g} gün kaldı";
+        return $"{-g} gün geçti";
+    }
+}

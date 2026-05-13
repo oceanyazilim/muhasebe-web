@@ -1,0 +1,222 @@
+@page "/profiller"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthService Auth
+@inject AppDbContext Db
+@inject IJSRuntime JS
+@using Microsoft.EntityFrameworkCore
+@using MuhasebeApp.Web.Data
+
+<PageTitle>Profiller</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-1"><i class="bi bi-people"></i> Profiller</h1>
+        <small class="text-muted">Alıcı ve borçlu profilleri — isim yazarak arayın</small>
+    </div>
+    <button class="btn btn-primary" @onclick="YeniAc">
+        <i class="bi bi-plus-circle"></i> Yeni Profil
+    </button>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-8">
+        <input @bind="_arama" @bind:event="oninput" @bind:after="Yukle" class="form-control" placeholder="Profil adı, telefon, e-posta..."/>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" @bind="_tipFiltre" @bind:after="Yukle">
+            <option value="-1">Tüm Tipler</option>
+            <option value="0">Müşteri</option>
+            <option value="1">Tedarikçi</option>
+            <option value="2">Müşteri/Tedarikçi</option>
+        </select>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Kod</th>
+                <th>Ünvan</th>
+                <th>Tip</th>
+                <th>Telefon</th>
+                <th>E-posta</th>
+                <th class="text-end">İşlem</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_liste.Count == 0)
+            {
+                <tr><td colspan="6" class="text-center text-muted py-4">Profil bulunamadı.</td></tr>
+            }
+            @foreach (var c in _liste)
+            {
+                <tr>
+                    <td>@c.Kod</td>
+                    <td><strong>@c.Unvan</strong></td>
+                    <td>@c.TipMetni</td>
+                    <td>@c.Telefon</td>
+                    <td>@c.Email</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => Duzenle(c)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => Sil(c)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_dialogAcik)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_secili.Id == 0 ? "Yeni Profil" : "Düzenle: " + _secili.Unvan)</h5>
+                    <button type="button" class="btn-close" @onclick="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_hata))
+                    {
+                        <div class="alert alert-danger">@_hata</div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Kod *</label>
+                            <input class="form-control" @bind="_secili.Kod"/>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Ünvan / Ad Soyad *</label>
+                            <input class="form-control" @bind="_secili.Unvan"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tip</label>
+                            <select class="form-select" @bind="_secili.Tip">
+                                <option value="@CariTipi.Musteri">Müşteri</option>
+                                <option value="@CariTipi.Tedarikci">Tedarikçi</option>
+                                <option value="@CariTipi.HerIkisi">Müşteri/Tedarikçi</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Vergi No</label>
+                            <input class="form-control" @bind="_secili.VergiNo"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">T.C. Kimlik</label>
+                            <input class="form-control" @bind="_secili.TcKimlikNo"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Telefon</label>
+                            <input class="form-control" @bind="_secili.Telefon"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">E-posta</label>
+                            <input class="form-control" @bind="_secili.Email"/>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Adres</label>
+                            <textarea class="form-control" rows="2" @bind="_secili.Adres"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Şehir</label>
+                            <input class="form-control" @bind="_secili.Sehir"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Açılış Bakiyesi (₺)</label>
+                            <input type="number" step="0.01" class="form-control" @bind="_secili.AcilisBakiyesi"/>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Notlar</label>
+                            <textarea class="form-control" rows="2" @bind="_secili.Notlar"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Kapat">İptal</button>
+                    <button class="btn btn-primary" @onclick="Kaydet">Kaydet</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string? _userId;
+    private string _arama = "";
+    private int _tipFiltre = -1;
+    private List<Cari> _liste = new();
+    private bool _dialogAcik;
+    private Cari _secili = new();
+    private string? _hata;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await Auth.GetUserIdAsync();
+        await Yukle();
+    }
+
+    private async Task Yukle()
+    {
+        if (string.IsNullOrEmpty(_userId)) return;
+        var q = Db.Cariler.Where(c => c.UserId == _userId);
+        if (_tipFiltre >= 0) q = q.Where(c => (int)c.Tip == _tipFiltre);
+        if (!string.IsNullOrWhiteSpace(_arama))
+        {
+            var a = "%" + _arama + "%";
+            q = q.Where(c => EF.Functions.Like(c.Unvan, a) || EF.Functions.Like(c.Kod, a)
+                || EF.Functions.Like(c.Telefon ?? "", a) || EF.Functions.Like(c.Email ?? "", a));
+        }
+        _liste = await q.OrderBy(c => c.Unvan).ToListAsync();
+    }
+
+    private async Task YeniAc()
+    {
+        var sayi = await Db.Cariler.CountAsync(c => c.UserId == _userId) + 1;
+        _secili = new Cari { UserId = _userId!, Kod = $"CR-{sayi:000}", Aktif = true };
+        _hata = null;
+        _dialogAcik = true;
+    }
+
+    private void Duzenle(Cari c)
+    {
+        _secili = c;
+        _hata = null;
+        _dialogAcik = true;
+    }
+
+    private async Task Sil(Cari c)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"{c.Unvan} silinsin mi? Tüm hareket ve faturaları da silinecek.")) return;
+        Db.Cariler.Remove(c);
+        await Db.SaveChangesAsync();
+        await Yukle();
+    }
+
+    private void Kapat() => _dialogAcik = false;
+
+    private async Task Kaydet()
+    {
+        if (string.IsNullOrWhiteSpace(_secili.Kod) || string.IsNullOrWhiteSpace(_secili.Unvan))
+        {
+            _hata = "Kod ve Ünvan zorunludur.";
+            return;
+        }
+        if (_secili.Id == 0)
+        {
+            _secili.UserId = _userId!;
+            Db.Cariler.Add(_secili);
+        }
+        else
+        {
+            Db.Cariler.Update(_secili);
+        }
+        await Db.SaveChangesAsync();
+        _dialogAcik = false;
+        await Yukle();
+    }
+}

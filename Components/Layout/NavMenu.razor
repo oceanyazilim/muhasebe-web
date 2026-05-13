@@ -1,0 +1,58 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">
+            <i class="bi bi-cash-coin"></i> Muhasebe Pro
+        </a>
+    </div>
+</div>
+
+<div class="nav-scrollable">
+    <nav class="flex-column">
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                        <i class="bi bi-house"></i> Anasayfa
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="alacaklar">
+                        <i class="bi bi-arrow-down-circle text-success"></i> Alacaklar
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="borclar">
+                        <i class="bi bi-arrow-up-circle text-danger"></i> Borçlar
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="profiller">
+                        <i class="bi bi-people"></i> Profiller
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="faturalar">
+                        <i class="bi bi-receipt"></i> Faturalar
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="hareketler">
+                        <i class="bi bi-list-ul"></i> Hareketler
+                    </NavLink>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Identity/Account/Login">
+                        <i class="bi bi-box-arrow-in-right"></i> Giriş Yap
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Identity/Account/Register">
+                        <i class="bi bi-person-plus"></i> Kayıt Ol
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+</div>

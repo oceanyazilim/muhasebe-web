@@ -1,0 +1,139 @@
+@page "/"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject AuthService Auth
+@inject AppDbContext Db
+@using Microsoft.EntityFrameworkCore
+@using MuhasebeApp.Web.Data
+
+<PageTitle>Anasayfa - Muhasebe Pro</PageTitle>
+
+<h1 class="mb-3">Anasayfa</h1>
+<p class="text-muted">@_selam — Bugün @DateTime.Today.ToString("dd MMMM yyyy, dddd")</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card text-bg-success">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2"><i class="bi bi-arrow-down-circle"></i> Alacaklarımız (Tahsil edilecek)</h6>
+                <h2 class="card-title">@_alacak.ToString("N2") ₺</h2>
+                <small>@_vadeGecenAlacakSayisi adet vadesi geçti</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-bg-danger">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2"><i class="bi bi-arrow-up-circle"></i> Borçlarımız (Ödenecek)</h6>
+                <h2 class="card-title">@_borc.ToString("N2") ₺</h2>
+                <small>@_vadeGecenBorcSayisi adet vadesi geçti</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted"><i class="bi bi-graph-up"></i> Net Pozisyon</h6>
+                <h2 class="card-title @(_net >= 0 ? "text-success" : "text-danger")">@_net.ToString("N2") ₺</h2>
+                <small class="text-muted">@(_net >= 0 ? "Alacaklı pozisyondasınız" : "Borçlu pozisyondasınız")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-arrow-down-circle text-success"></i> Yaklaşan Tahsilatlar</div>
+            <div class="list-group list-group-flush">
+                @if (_yaklasanAlacak.Count == 0)
+                {
+                    <div class="list-group-item text-muted small">Bekleyen tahsilat yok.</div>
+                }
+                @foreach (var o in _yaklasanAlacak)
+                {
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>@o.Baslik</strong>
+                            <div class="small text-muted">@o.Cari?.Unvan • @VadeMetni(o)</div>
+                        </div>
+                        <span class="text-success fw-bold">@o.KalanTutar.ToString("N2") ₺</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-arrow-up-circle text-danger"></i> Yaklaşan Ödemeler</div>
+            <div class="list-group list-group-flush">
+                @if (_yaklasanBorc.Count == 0)
+                {
+                    <div class="list-group-item text-muted small">Bekleyen ödeme yok.</div>
+                }
+                @foreach (var o in _yaklasanBorc)
+                {
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>@o.Baslik</strong>
+                            <div class="small text-muted">@o.Cari?.Unvan • @VadeMetni(o)</div>
+                        </div>
+                        <span class="text-danger fw-bold">@o.KalanTutar.ToString("N2") ₺</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _userId;
+    private string _selam = "Merhaba";
+    private decimal _alacak, _borc, _net;
+    private int _vadeGecenAlacakSayisi, _vadeGecenBorcSayisi;
+    private List<OdemeNotu> _yaklasanAlacak = new();
+    private List<OdemeNotu> _yaklasanBorc = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await Auth.GetUserIdAsync();
+        var saat = DateTime.Now.Hour;
+        _selam = saat < 12 ? "Günaydın" : (saat < 18 ? "İyi günler" : "İyi akşamlar");
+        await Yukle();
+    }
+
+    private async Task Yukle()
+    {
+        if (string.IsNullOrEmpty(_userId)) return;
+        var sorgu = Db.OdemeNotlari.Include(o => o.Cari).Where(o => o.UserId == _userId);
+
+        _alacak = await sorgu
+            .Where(o => o.Yon == OdemeYonu.Alacak && (o.Durum == OdemeDurumu.Beklemede || o.Durum == OdemeDurumu.KismiOdendi))
+            .SumAsync(o => o.Tutar - o.OdenenTutar);
+
+        _borc = await sorgu
+            .Where(o => o.Yon == OdemeYonu.Borc && (o.Durum == OdemeDurumu.Beklemede || o.Durum == OdemeDurumu.KismiOdendi))
+            .SumAsync(o => o.Tutar - o.OdenenTutar);
+
+        _net = _alacak - _borc;
+
+        var bugun = DateTime.Today;
+        _vadeGecenAlacakSayisi = await sorgu.CountAsync(o => o.Yon == OdemeYonu.Alacak && o.VadeTarihi < bugun && (o.Durum == OdemeDurumu.Beklemede || o.Durum == OdemeDurumu.KismiOdendi));
+        _vadeGecenBorcSayisi = await sorgu.CountAsync(o => o.Yon == OdemeYonu.Borc && o.VadeTarihi < bugun && (o.Durum == OdemeDurumu.Beklemede || o.Durum == OdemeDurumu.KismiOdendi));
+
+        _yaklasanAlacak = await sorgu
+            .Where(o => o.Yon == OdemeYonu.Alacak && (o.Durum == OdemeDurumu.Beklemede || o.Durum == OdemeDurumu.KismiOdendi))
+            .OrderBy(o => o.VadeTarihi).Take(8).ToListAsync();
+
+        _yaklasanBorc = await sorgu
+            .Where(o => o.Yon == OdemeYonu.Borc && (o.Durum == OdemeDurumu.Beklemede || o.Durum == OdemeDurumu.KismiOdendi))
+            .OrderBy(o => o.VadeTarihi).Take(8).ToListAsync();
+    }
+
+    private string VadeMetni(OdemeNotu o)
+    {
+        var g = (o.VadeTarihi.Date - DateTime.Today).Days;
+        if (g == 0) return "Bugün vadesi";
+        if (g > 0) return $"{g} gün kaldı";
+        return $"{-g} gün geçti";
+    }
+}
