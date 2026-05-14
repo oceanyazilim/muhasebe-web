@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MuhasebeApp.Web.Components;
@@ -19,6 +20,15 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddRazorPages();
 builder.Services.AddHealthChecks();
+
+// DataProtection key'leri App_Data altinda persist et — boylece container
+// restart'ta antiforgery / cookie / oturum tokenlari gecersiz olmasin.
+// /app/App_Data Dokploy volume'una mount edildigi surece keyler hayatta kalir.
+var keysDir = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys");
+Directory.CreateDirectory(keysDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDir))
+    .SetApplicationName("MuhasebePro");
 
 var rawConn = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? Environment.GetEnvironmentVariable("DATABASE_URL")
