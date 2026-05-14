@@ -7,8 +7,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://0.0.0.0:8080
-      ConnectionStrings__DefaultConnection: Data Source=/app/App_Data/muhasebe-web.db
+      # PostgreSQL bağlantısı — Dokploy panelinden ENV var olarak override edilir.
+      # URI veya klasik (Host=...;Port=...;...) format çalışır.
+      ConnectionStrings__DefaultConnection: ${DATABASE_URL:-}
     volumes:
+      # Yüklenen dekont dosyaları için
       - muhasebe-data:/app/App_Data
       - muhasebe-keys:/root/.aspnet/DataProtection-Keys
     networks:

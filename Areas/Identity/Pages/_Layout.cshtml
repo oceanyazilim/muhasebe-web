@@ -7,7 +7,6 @@
     {
         Layout = "/Pages/Shared/_Layout.cshtml";
     }
+    IgnoreSection("Scripts");
 }
 @RenderBody()
-
-@await RenderSectionAsync("Scripts", required: false)

@@ -11,3 +11,6 @@ App_Data/*.db-wal
 publish/
 out/
 *.log
+.env
+.env.local
+appsettings.Local.json

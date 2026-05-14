@@ -1,6 +1,6 @@
 # Muhasebe Pro Web
 
-Çok kullanıcılı, web tabanlı muhasebe uygulaması. **ASP.NET Core 8 + Blazor Server + Identity + SQLite**.
+Çok kullanıcılı, web tabanlı muhasebe uygulaması. **ASP.NET Core 8 + Blazor Server + Identity + PostgreSQL**.
 
 🌐 **Canlı**: https://muhasebe.oceanyazilim.com
 
@@ -18,15 +18,30 @@
 
 - ASP.NET Core 8 / Blazor Server (Interactive)
 - ASP.NET Core Identity (e-posta + şifre auth)
-- Entity Framework Core 8 + SQLite
+- Entity Framework Core 8 + **PostgreSQL (Npgsql)**
 - Bootstrap 5.3 + Bootstrap Icons (CDN)
-- Docker (multi-stage build)
+- Docker (multi-stage build), Traefik reverse proxy uyumlu
+- Healthcheck endpoint: `/health`
 
 ## Yerel Çalıştırma
 
 ```bash
-git clone https://github.com/oceanyazilim/muhasebe-web.git
+git clone https://github.com/grxtor/muhasebe-web.git
 cd muhasebe-web
+
+# PostgreSQL bağlantısını user-secrets ile ver (commit'lenmez)
+dotnet user-secrets init
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "postgresql://USER:PASS@HOST:5432/DB"
+
+dotnet run
+```
+
+veya `.env` ile:
+
+```bash
+cp .env.example .env
+# .env içine PostgreSQL DSN'inizi yazın
+export $(grep -v '^#' .env | xargs)
 dotnet run
 ```
 
@@ -36,35 +51,44 @@ dotnet run
 
 ```bash
 docker build -t muhasebe-web .
-docker run -d -p 8080:8080 -v muhasebe-data:/app/App_Data --name muhasebe muhasebe-web
+docker run -d -p 8080:8080 \
+  -e ConnectionStrings__DefaultConnection="postgresql://USER:PASS@HOST:5432/DB" \
+  -v muhasebe-data:/app/App_Data \
+  --name muhasebe muhasebe-web
 ```
 
 `http://localhost:8080` adresinden eriş.
 
-## Dokploy / Coolify Deployment
+## Dokploy Deployment
 
-Panele şunları gir:
+1. **Application** olarak repo'yu bağla:
+   - Repository: `https://github.com/grxtor/muhasebe-web.git`
+   - Branch: `main`
+   - Build Type: `Dockerfile`
 
-- **Repository URL:** `https://github.com/oceanyazilim/muhasebe-web.git`
-- **Branch:** `main`
-- **Build Type:** Dockerfile
-- **Dockerfile Path:** `Dockerfile`
-- **Container Port:** `8080`
-- **Volume:**
-  - Source: `muhasebe-data`
-  - Mount Path: `/app/App_Data`
-- **Environment Variables:**
-  ```
-  ASPNETCORE_ENVIRONMENT=Production
-  ConnectionStrings__DefaultConnection=Data Source=/app/App_Data/muhasebe-web.db
-  ```
+2. **Environment Variables** ekle:
+   ```
+   ASPNETCORE_ENVIRONMENT=Production
+   ConnectionStrings__DefaultConnection=postgresql://postgres:PASSWORD@HOST:5432/postgres
+   ```
+
+3. **Domains** sekmesinden domain ekle:
+   - Host: `muhasebe.oceanyazilim.com`
+   - Container Port: `8080`
+   - HTTPS: aktif (Let's Encrypt)
+
+4. **Volume** (opsiyonel — dekont dosyaları için):
+   - Source: `muhasebe-data`
+   - Mount: `/app/App_Data`
+
+5. **Deploy** → İlk açılışta tablolar otomatik oluşturulur (`EnsureCreated`).
 
 ## Veri Yedekleme
 
-SQLite tek dosya: `App_Data/muhasebe-web.db`
+PostgreSQL dump:
 
 ```bash
-docker cp muhasebe:/app/App_Data/muhasebe-web.db ./backup-$(date +%Y%m%d).db
+pg_dump "postgresql://USER:PASS@HOST:5432/DB" > backup-$(date +%Y%m%d).sql
 ```
 
 ## Lisans
