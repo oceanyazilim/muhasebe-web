@@ -16,6 +16,11 @@ RUN dotnet publish -c Release -o /app/publish --no-restore /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
+# curl: healthcheck için (aspnet:8.0 imajında varsayılan yok)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Yüklenen dekont dosyaları için kalıcı dizin
 RUN mkdir -p /app/App_Data && chmod 777 /app/App_Data
 
@@ -29,6 +34,6 @@ ENV DOTNET_RUNNING_IN_CONTAINER=true
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
+  CMD curl --fail --silent --show-error http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["dotnet", "MuhasebeApp.Web.dll"]
