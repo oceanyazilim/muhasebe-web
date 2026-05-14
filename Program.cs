@@ -6,6 +6,12 @@ using MuhasebeApp.Web.Data;
 using MuhasebeApp.Web.Models;
 using MuhasebeApp.Web.Services;
 
+// Npgsql 6+ varsayilan olarak Kind=Local DateTime'lari 'timestamp with time zone'
+// sutunlarina yazmayi yasakliyor. SQLite'tan goc ettigimiz icin kod genelinde
+// DateTime.Today / DateTime.Now (Kind=Local) kullaniliyor. Eski davranisi acip
+// bu degerleri 'timestamp without time zone' olarak ele aliyoruz.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
